@@ -523,6 +523,7 @@ main() {
     echo "📂 检测到现有配置，使用已有的端口和密码"
     download_binary
     generate_cert
+    detect_system_resources
   fi
   
   # 保存配置信息到文件（用于查看）

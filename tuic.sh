@@ -594,6 +594,7 @@ main() {
     echo "📂 检测到现有配置，使用已有的端口、UUID 和密码"
     generate_cert
     download_binary
+    detect_system_resources
   fi
   # 保存配置信息到文件（用于查看）
   cat > tuic_config.txt <<EOF
