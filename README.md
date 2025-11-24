@@ -1,61 +1,30 @@
-# 代理服务器自动部署工具集
+# 🚀 Eishare-JD - Hysteria2 & TUIC 一键部署脚本
 
-一套用于在低内存环境下快速部署高性能代理服务器的自动化脚本工具集，支持 Hysteria2 和 TUIC 两种协议。
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Shell](https://img.shields.io/badge/shell-bash-green.svg)](https://www.gnu.org/software/bash/)
+[![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)](https://www.linux.org/)
 
-## 📋 项目简介
+> 适用于超低内存环境（32-64MB）的 Hysteria2 和 TUIC 代理服务器自动部署脚本
 
-本项目提供两个独立的部署脚本，专为资源受限环境（如 VPS、容器）设计，能够自动检测系统资源并优化配置，实现一键部署。
+## ✨ 特性
 
-### 支持的协议
+- 🎯 **一键部署** - 无需复杂配置，一条命令即可完成部署
+- 💾 **超低内存优化** - 专为 32-64MB 内存环境设计
+- 🔄 **自动资源调优** - 根据系统资源自动调整配置参数
+- 📊 **实时监控** - 内置 CPU、内存、网络流量监控
+- 🔐 **自动证书生成** - 自动生成自签名证书
+- 🐳 **容器友好** - 支持 Docker、Pterodactyl、Kubernetes 等容器环境
+- 🔧 **自动启动** - 支持 systemd 和 crontab 自动启动配置
+- 💡 **配置持久化** - 重启后自动恢复配置
 
-- **Hysteria2 v2.6.5** - 基于 QUIC 的高性能代理协议
-- **TUIC v1.4.5** - 轻量级 QUIC 代理协议
+## 📋 系统要求
 
-## ✨ 核心特性
+- **操作系统**: Linux (x86_64 或 ARM64)
+- **最低内存**: 32MB
+- **推荐内存**: 128MB+
+- **必需工具**: `curl`, `openssl`, `bash`
 
-### 🚀 一键部署
-- 自动下载二进制文件
-- 自动生成自签名证书
-- 自动生成客户端连接链接
-- 支持自定义端口和密码
-
-### 📊 智能资源管理
-- 自动检测系统内存和 CPU 核心数
-- 根据资源情况自动调整配置参数
-- 实时监控 CPU、内存、网络使用率
-- 资源过载时自动降低配置
-
-### 🔄 配置持久化
-- 配置文件自动保存
-- 重启后自动恢复配置
-- 支持配置备份和恢复
-- 证书文件持久化
-
-### 🐳 容器友好
-- 自动检测容器环境（Docker、Kubernetes、Pterodactyl）
-- 容器环境下启用详细日志
-- 适配非交互式环境
-
-### 🛡️ 高可用性
-- 进程守护和自动重启
-- 支持 systemd 服务
-- 支持 crontab 自动启动
-- 心跳监控和状态报告
-
-## 📦 系统要求
-
-### 最低配置
-- **内存**: 32MB（超低内存模式）
-- **CPU**: 1 核心
-- **系统**: Linux（支持 x86_64 和 ARM64）
-- **依赖**: curl, openssl
-
-### 推荐配置
-- **内存**: 512MB 或更高
-- **CPU**: 2 核心或更高
-- **系统**: Ubuntu 20.04+ / Debian 10+ / CentOS 7+
-
-## 🚀 一键安装（推荐）
+## 🚀 一键安装
 
 ### Hysteria2 一键安装
 
@@ -83,259 +52,258 @@ curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tu
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tuic.sh | sed 's/\r$//' | bash -s 8443 550e8400-e29b-41d4-a716-446655440000 mypass123
 ```
 
-## 🚀 快速开始
+## 📖 使用说明
 
-### Hysteria2 部署
+### Hysteria2 脚本
 
-#### 基本部署（使用默认配置）
+#### 基本用法
+
 ```bash
-bash hy2.sh
-```
+# 下载脚本
+curl -O https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh
 
-#### 自定义端口和密码
-```bash
-bash hy2.sh 443 mypassword123
-```
-
-#### 参数说明
-- 第一个参数：端口号（默认：22222）
-- 第二个参数：认证密码（默认：ieshare2025）
-
-### TUIC 部署
-
-#### 基本部署（随机生成配置）
-```bash
-bash tuic.sh
-```
-
-#### 自定义配置
-```bash
-bash tuic.sh 8443 550e8400-e29b-41d4-a716-446655440000 mypass123
+# 运行脚本
+bash hy2.sh [端口] [密码]
 ```
 
 #### 参数说明
-- 第一个参数：端口号（默认：随机 20000-60000）
-- 第二个参数：UUID（默认：自动生成）
-- 第三个参数：密码（默认：随机生成）
 
-## 📝 配置文件
+- **端口** (可选): 服务器监听端口，默认 `22222`
+- **密码** (可选): 认证密码，默认 `ieshare2025`
 
-### Hysteria2 配置文件
-- `server.yaml` - 主配置文件
-- `cert.pem` - TLS 证书
-- `key.pem` - TLS 私钥
-- `hy2_config.txt` - 配置信息记录
+#### 配置文件
 
-### TUIC 配置文件
-- `server.toml` - 主配置文件
-- `tuic-cert.pem` - TLS 证书
-- `tuic-key.pem` - TLS 私钥
-- `tuic_config.txt` - 配置信息记录
-- `tuic_link.txt` - 客户端连接链接
+脚本会生成以下文件：
 
-## 📊 资源监控
+- `server.yaml` - Hysteria2 配置文件
+- `cert.pem` - 自签名证书
+- `key.pem` - 证书私钥
+- `hy2_config.txt` - 配置信息摘要
+- `hy2_monitor.sh` - 资源监控脚本
+- `hy2_monitor.log` - 监控日志
 
-两个脚本都内置了资源监控功能，会自动启动后台监控进程。
+#### 默认配置
 
-### 查看监控日志
-
-**Hysteria2:**
-```bash
-tail -f hy2_monitor.log
+```yaml
+端口: 22222
+密码: ieshare2025
+SNI: www.bing.com
+ALPN: h3
 ```
 
-**TUIC:**
+### TUIC 脚本
+
+#### 基本用法
+
 ```bash
-tail -f tuic_monitor.log
+# 下载脚本
+curl -O https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tuic.sh
+
+# 运行脚本
+bash tuic.sh [端口] [UUID] [密码]
 ```
 
-### 监控指标
-- CPU 使用率（%）
-- 内存使用率（%）
-- 网络流量（上传/下载 KB/s）
-- 实时状态心跳
+#### 参数说明
 
-### 动态调整
-当 CPU 或内存使用率超过 85% 时，系统会自动降低带宽和连接数配置；当资源使用率降至 50% 以下时，会自动恢复标准配置。
+- **端口** (可选): 服务器监听端口，默认随机生成 (20000-60000)
+- **UUID** (可选): 用户 UUID，默认自动生成
+- **密码** (可选): 认证密码，默认随机生成
+
+#### 配置文件
+
+脚本会生成以下文件：
+
+- `server.toml` - TUIC 配置文件
+- `tuic-cert.pem` - 自签名证书
+- `tuic-key.pem` - 证书私钥
+- `tuic_link.txt` - TUIC 连接链接
+- `tuic_config.txt` - 配置信息摘要
+- `tuic_monitor.sh` - 资源监控脚本
+- `tuic_monitor.log` - 监控日志
 
 ## 🔧 高级功能
 
-### 强制重新部署
-完全清理并重新部署（会生成新的证书和配置）：
+### 资源监控
+
+两个脚本都内置了资源监控功能，会自动：
+
+- 📊 每 10 秒记录 CPU、内存、网络使用情况
+- ⚠️ 当 CPU 或内存超过 85% 时自动降低配置
+- ✅ 当资源充足时自动恢复标准配置
+
+查看监控日志：
 
 ```bash
-FORCE_REDEPLOY=true bash hy2.sh
-FORCE_REDEPLOY=true bash tuic.sh
-```
+# Hysteria2
+tail -f hy2_monitor.log
 
-### 清理重新部署（保留证书）
-清理并重新部署，但保留证书文件（节点链接保持有效）：
-
-```bash
-CLEAN_REDEPLOY=true bash hy2.sh
-CLEAN_REDEPLOY=true bash tuic.sh
+# TUIC
+tail -f tuic_monitor.log
 ```
 
 ### 自动启动配置
 
-脚本会在首次部署时询问是否配置自动启动。如果跳过，可以手动配置：
+脚本支持两种自动启动方式：
 
-**使用 systemd（推荐）:**
+1. **systemd** (推荐，需要 root 权限)
+   - 自动创建系统服务
+   - 开机自动启动
+   - 支持 `systemctl` 管理
+
+2. **crontab** (无需 root)
+   - 使用 `@reboot` 定时任务
+   - 开机自动启动
+
+### 配置持久化
+
+脚本会自动保存配置，重启后无需重新输入参数：
+
+```bash
+# 首次运行
+bash hy2.sh 443 mypassword
+
+# 重启后直接运行（自动使用之前的配置）
+bash hy2.sh
+```
+
+### 强制重新部署
+
+如需完全重新部署：
+
 ```bash
 # Hysteria2
-sudo systemctl enable hysteria2
-sudo systemctl start hysteria2
+FORCE_REDEPLOY=true bash hy2.sh
 
 # TUIC
-sudo systemctl enable tuic
-sudo systemctl start tuic
+FORCE_REDEPLOY=true bash tuic.sh
 ```
 
-**使用 crontab:**
+### 清理重新部署（保留证书）
+
+保留证书和配置，仅重新部署：
+
 ```bash
-crontab -e
-# 添加以下行（根据实际路径修改）
-@reboot cd /path/to/script && ./hysteria-linux-amd64 server -c server.yaml &
+# Hysteria2
+CLEAN_REDEPLOY=true bash hy2.sh
+
+# TUIC
+CLEAN_REDEPLOY=true bash tuic.sh
 ```
 
-## 🔍 进程管理
+## 📊 内存优化策略
 
-### 查看运行状态
-```bash
-# 查看 Hysteria2 进程
-ps aux | grep hysteria-linux
+脚本会根据系统内存自动调整配置：
 
-# 查看 TUIC 进程
-ps aux | grep tuic-server
-```
+| 内存大小 | Hysteria2 带宽 | TUIC 窗口大小 | 并发流 |
+|---------|---------------|--------------|--------|
+| < 128MB | 50 Mbps | 8MB / 4MB | 2 |
+| 128-384MB | 100 Mbps | 16MB / 8MB | 3 |
+| 384-768MB | 150 Mbps | 25MB / 12MB | 4 |
+| ≥ 768MB | 200 Mbps | 32MB / 16MB | 6 |
 
-### 停止服务
-```bash
-# 停止 Hysteria2
-pkill -f hysteria-linux
+## 🐳 容器环境支持
 
-# 停止 TUIC
-pkill -f tuic-server
-```
+脚本自动检测以下容器环境：
 
-### 重启服务
-```bash
-# 重启 Hysteria2
-pkill -f hysteria-linux && bash hy2.sh
+- Docker (检测 `/.dockerenv`)
+- Pterodactyl (检测 `$PTERODACTYL` 环境变量)
+- Kubernetes (检测 `$KUBERNETES_SERVICE_HOST`)
+- 通用容器 (检测 `$container` 环境变量)
 
-# 重启 TUIC
-pkill -f tuic-server && bash tuic.sh
-```
-
-## 📱 客户端配置
-
-### Hysteria2 客户端链接格式
-```
-hysteria2://密码@服务器IP:端口?sni=www.bing.com&alpn=h3&insecure=1#节点名称
-```
-
-### TUIC 客户端链接格式
-```
-tuic://UUID:密码@服务器IP:端口?congestion_control=bbr&alpn=h3&allowInsecure=1&sni=www.bing.com&udp_relay_mode=native&disable_sni=0&reduce_rtt=1&max_udp_relay_packet_size=8192#节点名称
-```
-
-部署完成后，脚本会自动生成完整的客户端连接链接，直接复制到客户端即可使用。
-
-## 🐳 容器部署
-
-### Docker 示例
-
-**Hysteria2:**
-```dockerfile
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y curl openssl
-COPY hy2.sh /app/
-WORKDIR /app
-CMD ["bash", "hy2.sh"]
-```
-
-**TUIC:**
-```dockerfile
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y curl openssl
-COPY tuic.sh /app/
-WORKDIR /app
-CMD ["bash", "tuic.sh"]
-```
-
-### 容器环境特性
-- 自动检测容器环境
+容器环境下会：
 - 启用详细日志输出
-- 显示实时状态心跳
+- 显示实时状态监控
 - 过滤冗余连接日志
 
-## ⚙️ 配置参数说明
+## 📝 客户端配置
 
-### 内存自适应配置
+### Hysteria2 连接链接格式
 
-| 内存大小 | 配置级别 | 带宽限制 | 并发流 | 窗口大小 |
-|---------|---------|---------|--------|---------|
-| < 128MB | 超低内存 | 50Mbps | 2-3 | 最小 |
-| 128-384MB | 低内存 | 100Mbps | 3-4 | 优化 |
-| 384-768MB | 中等内存 | 150Mbps | 4-6 | 平衡 |
-| ≥ 768MB | 标准配置 | 200Mbps | 6+ | 标准 |
-
-### 监控阈值配置
-
-可以在脚本开头修改以下变量：
-
-```bash
-MONITOR_INTERVAL=10      # 监控间隔（秒）
-CPU_THRESHOLD=85         # CPU 告警阈值（%）
-MEM_THRESHOLD=85         # 内存告警阈值（%）
-HEARTBEAT_INTERVAL=1     # 心跳日志间隔（秒）
+```
+hysteria2://密码@服务器IP:端口?sni=www.bing.com&alpn=h3&insecure=1#Hy2-服务器IP
 ```
 
-## 🛠️ 故障排查
+### TUIC 连接链接格式
+
+```
+tuic://UUID:密码@服务器IP:端口?congestion_control=bbr&alpn=h3&allowInsecure=1&sni=www.bing.com&udp_relay_mode=native&disable_sni=0&reduce_rtt=1&max_udp_relay_packet_size=8192#TUIC-服务器IP
+```
+
+连接链接会自动保存到：
+- Hysteria2: 控制台输出
+- TUIC: `tuic_link.txt` 文件
+
+## 🛠️ 故障排除
+
+### 脚本无法下载
+
+```bash
+# 使用代理下载
+export https_proxy=http://your-proxy:port
+curl -O https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh
+```
 
 ### 端口被占用
+
 ```bash
 # 检查端口占用
-netstat -tulpn | grep :端口号
+netstat -tlnp | grep 端口号
 
-# 或使用 ss
-ss -tulpn | grep :端口号
+# 或使用其他端口
+bash hy2.sh 其他端口号
 ```
 
-### 证书问题
-如果遇到证书相关错误，可以删除证书文件重新生成：
+### 服务无法启动
+
 ```bash
-rm -f cert.pem key.pem tuic-cert.pem tuic-key.pem
-bash hy2.sh  # 或 bash tuic.sh
+# 检查日志
+tail -f hy2_monitor.log  # Hysteria2
+tail -f tuic_monitor.log # TUIC
+
+# 检查进程
+ps aux | grep hysteria
+ps aux | grep tuic
 ```
 
 ### 内存不足
-如果系统内存极低，可以手动编辑配置文件降低参数：
-- 减少 `max_concurrent_streams`
-- 降低 `send_window` 和 `receive_window`
-- 减少带宽限制
 
-### 查看详细日志
-```bash
-# Hysteria2 日志
-tail -f hy2_monitor.log
+脚本已针对低内存环境优化，如仍然出现问题：
 
-# TUIC 日志
-tail -f tuic_monitor.log
-```
+1. 关闭不必要的服务
+2. 使用更小的配置参数
+3. 考虑升级服务器内存
 
-## 📄 许可证
+## 🔒 安全建议
 
-本项目仅供学习和研究使用，请遵守当地法律法规。
+1. **修改默认密码** - 使用强密码替代默认密码
+2. **定期更新** - 定期更新脚本和二进制文件
+3. **防火墙配置** - 仅开放必要端口
+4. **证书管理** - 妥善保管证书私钥文件
+5. **访问控制** - 限制服务器访问来源
 
-## 🤝 贡献
+## 🙏 致谢
 
-欢迎提交 Issue 和 Pull Request！
+### 原作者
 
-## 📮 联系方式
+本项目基于 [eishare](https://github.com/eishare) 的原始工作进行优化和改进：
 
-如有问题或建议，请通过 GitHub Issues 联系。
+- **原始项目**: [tuic-hy2-node.js-python](https://github.com/eishare/tuic-hy2-node.js-python)
+- **原作者贡献**: 提供了 Hysteria2 和 TUIC 在 Pterodactyl 翼龙面板的一键部署脚本
 
----
+### 本项目改进
 
-**注意**: 本工具仅用于合法用途，使用者需自行承担使用责任。
+在原作者工作的基础上，本项目进行了以下优化：
+
+- ✅ **增强的资源监控** - 添加了详细的 CPU、内存、网络监控功能
+- ✅ **智能资源调优** - 根据系统资源自动调整配置参数
+- ✅ **配置持久化** - 支持配置文件的备份和恢复
+- ✅ **容器环境优化** - 改进了容器环境下的日志输出和状态监控
+- ✅ **更好的错误处理** - 增强了脚本的健壮性和错误提示
+- ✅ **完善的文档** - 提供了详细的中文使用文档
+
+### 上游项目
+
+- [Hysteria](https://github.com/apernet/hysteria) - 高性能代理协议
+- [TUIC](https://github.com/Itsusinn/tuic) - 基于 QUIC 的代理协议
+
+⭐ 如果这个项目对您有帮助，请给个 Star！
