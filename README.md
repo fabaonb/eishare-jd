@@ -19,32 +19,44 @@
 - **必需工具**: `curl`, `openssl`, `bash`
 ## 🚀 一键安装
 ### Hysteria2 一键安装
+
 ```bash
+
 # 默认配置（端口 22222，默认密码）
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh | sed 's/\r$//' | bash
 # 指定端口 443
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh | sed 's/\r$//' | bash -s 443
 # 指定端口 443 和密码
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh | sed 's/\r$//' | bash -s 443 mypassword123
+
 ```
+
 ### TUIC 一键安装
+
 ```bash
+
 # 默认配置（随机端口、UUID 和密码）
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tuic.sh | sed 's/\r$//' | bash
 # 指定端口 8443
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tuic.sh | sed 's/\r$//' | bash -s 8443
 # 指定端口、UUID 和密码
 curl -Ls https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tuic.sh | sed 's/\r$//' | bash -s 8443 550e8400-e29b-41d4-a716-446655440000 mypass123
+
 ```
+
 ## 📖 使用说明
 ### Hysteria2 脚本
 #### 基本用法
+
 ```bash
+
 # 下载脚本
 curl -O https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh
 # 运行脚本
 bash hy2.sh [端口] [密码]
+
 ```
+
 #### 参数说明
 - **端口** (可选): 服务器监听端口，默认 `22222`
 - **密码** (可选): 认证密码，默认 `ieshare2025`
@@ -58,20 +70,28 @@ bash hy2.sh [端口] [密码]
 - `hy2_monitor.sh` - 资源监控脚本
 - `hy2_monitor.log` - 监控日志
 #### 默认配置
+
 ```yaml
+
 端口: 22222
 密码: ieshare2025
 SNI: www.bing.com
 ALPN: h3
+
 ```
+
 ### TUIC 脚本
 #### 基本用法
+
 ```bash
+
 # 下载脚本
 curl -O https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/tuic.sh
 # 运行脚本
 bash tuic.sh [端口] [UUID] [密码]
+
 ```
+
 #### 参数说明
 - **端口** (可选): 服务器监听端口，默认随机生成 (20000-60000)
 - **UUID** (可选): 用户 UUID，默认自动生成
@@ -92,12 +112,16 @@ bash tuic.sh [端口] [UUID] [密码]
 - ⚠️ 当 CPU 或内存超过 85% 时自动降低配置
 - ✅ 当资源充足时自动恢复标准配置
 查看监控日志：
+
 ```bash
+
 # Hysteria2
 tail -f hy2_monitor.log
 # TUIC
 tail -f tuic_monitor.log
+
 ```
+
 ### 自动启动配置
 脚本支持两种自动启动方式：
 1. **systemd** (推荐，需要 root 权限)
@@ -109,28 +133,40 @@ tail -f tuic_monitor.log
    - 开机自动启动
 ### 配置持久化
 脚本会自动保存配置，重启后无需重新输入参数：
+
 ```bash
+
 # 首次运行
 bash hy2.sh 443 mypassword
 # 重启后直接运行（自动使用之前的配置）
 bash hy2.sh
+
 ```
+
 ### 强制重新部署
 如需完全重新部署：
+
 ```bash
+
 # Hysteria2
 FORCE_REDEPLOY=true bash hy2.sh
 # TUIC
 FORCE_REDEPLOY=true bash tuic.sh
+
 ```
+
 ### 清理重新部署（保留证书）
 保留证书和配置，仅重新部署：
+
 ```bash
+
 # Hysteria2
 CLEAN_REDEPLOY=true bash hy2.sh
 # TUIC
 CLEAN_REDEPLOY=true bash tuic.sh
+
 ```
+
 ## 📊 内存优化策略
 脚本会根据系统内存自动调整配置：
 | 内存大小 | Hysteria2 带宽 | TUIC 窗口大小 | 并发流 |
@@ -151,39 +187,59 @@ CLEAN_REDEPLOY=true bash tuic.sh
 - 过滤冗余连接日志
 ## 📝 客户端配置
 ### Hysteria2 连接链接格式
+
 ```
+
 hysteria2://密码@服务器IP:端口?sni=www.bing.com&alpn=h3&insecure=1#Hy2-服务器IP
+
 ```
+
 ### TUIC 连接链接格式
+
 ```
+
 tuic://UUID:密码@服务器IP:端口?congestion_control=bbr&alpn=h3&allowInsecure=1&sni=www.bing.com&udp_relay_mode=native&disable_sni=0&reduce_rtt=1&max_udp_relay_packet_size=8192#TUIC-服务器IP
+
 ```
+
 连接链接会自动保存到:
 - Hysteria2: `hy2_link.txt` 文件和控制台输出
 - TUIC: `tuic_link.txt` 文件和控制台输出
 ## 🛠️ 故障排除
 ### 脚本无法下载
+
 ```bash
+
 # 使用代理下载
 export https_proxy=http://your-proxy:port
 curl -O https://raw.githubusercontent.com/fabaonb/eishare-jd/refs/heads/main/hy2.sh
+
 ```
+
 ### 端口被占用
+
 ```bash
+
 # 检查端口占用
 netstat -tlnp | grep 端口号
 # 或使用其他端口
 bash hy2.sh 其他端口号
+
 ```
+
 ### 服务无法启动
+
 ```bash
+
 # 检查日志
 tail -f hy2_monitor.log  # Hysteria2
 tail -f tuic_monitor.log # TUIC
 # 检查进程
 ps aux | grep hysteria
 ps aux | grep tuic
+
 ```
+
 ### 内存不足
 脚本已针对低内存环境优化，如仍然出现问题：
 1. 关闭不必要的服务
