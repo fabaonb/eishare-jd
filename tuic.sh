@@ -5,7 +5,6 @@
 set -euo pipefail
 export LC_ALL=C
 IFS=$'\n\t'
-
 # ============================================================
 # 配置变量（可根据需要修改）
 # ============================================================
@@ -16,75 +15,73 @@ SERVER_TOML="server.toml"       # 配置文件名
 CERT_PEM="tuic-cert.pem"        # 证书文件名
 KEY_PEM="tuic-key.pem"          # 密钥文件名
 LINK_TXT="tuic_link.txt"        # 连接链接文件名
-
 # 资源监控配置
 MONITOR_INTERVAL=10             # 监控间隔（秒）
 CPU_THRESHOLD=85                # CPU 告警阈值（%）
 MEM_THRESHOLD=85                # 内存告警阈值（%）
 HEARTBEAT_INTERVAL=1           # 心跳日志间隔（秒）
-
 # 下载地址
 TUIC_DOWNLOAD_URL="https://github.com/Itsusinn/tuic/releases/download/${TUIC_VERSION}/tuic-server-x86_64-linux"
 # ============================================================
-
-# ========== 随机端口 ==========
+# ========== 随机生成函数 ==========
 random_port() {
   echo $(( (RANDOM % 40000) + 20000 ))
 }
-
-# ========== 选择端口和UUID ==========
+random_string() {
+  openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p
+}
+# ========== 参数处理函数 ==========
 read_port() {
   if [[ $# -ge 1 && -n "${1:-}" ]]; then
     TUIC_PORT="$1"
     echo "✅ 使用指定端口: $TUIC_PORT"
     return
   fi
-
   if [[ -n "${SERVER_PORT:-}" ]]; then
     TUIC_PORT="$SERVER_PORT"
     echo "✅ 使用环境变量端口: $TUIC_PORT"
     return
   fi
-
   TUIC_PORT=$(random_port)
   echo "🎲 随机端口: $TUIC_PORT"
 }
-
 read_uuid() {
   if [[ $# -ge 2 && -n "${2:-}" ]]; then
     TUIC_UUID="$2"
     echo "✅ 使用指定 UUID: $TUIC_UUID"
-  else
-    TUIC_UUID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
-    echo "🎲 生成随机 UUID: $TUIC_UUID"
+    return
   fi
+  
+  TUIC_UUID="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
+  echo "🎲 生成随机 UUID: $TUIC_UUID"
 }
-
 read_password() {
   if [[ $# -ge 3 && -n "${3:-}" ]]; then
     TUIC_PASSWORD="$3"
     echo "✅ 使用指定密码: $TUIC_PASSWORD"
-  else
-    TUIC_PASSWORD="$(openssl rand -hex 16)"
-    echo "🎲 生成随机密码: $TUIC_PASSWORD"
+    return
   fi
+  
+  TUIC_PASSWORD="$(random_string)"
+  echo "🎲 生成随机密码: $TUIC_PASSWORD"
 }
-
 # ========== 检查已有配置 ==========
 load_existing_config() {
   if [[ -f "$SERVER_TOML" ]]; then
-    TUIC_PORT=$(grep '^server' "$SERVER_TOML" | sed 's/.*://; s/"//g' | tr -d '\n\r ')
-    TUIC_UUID=$(grep '^\[users\]' -A1 "$SERVER_TOML" | tail -n1 | awk '{print $1}' | tr -d '\n\r ')
-    TUIC_PASSWORD=$(grep '^\[users\]' -A1 "$SERVER_TOML" | tail -n1 | awk -F'"' '{print $2}' | tr -d '\n\r ')
-    echo "📂 Existing config detected. Loading..."
-    return 0
+    TUIC_PORT=$(grep '^server' "$SERVER_TOML" | sed 's/.*://; s/"//g' | tr -d '\n\r ' || echo "")
+    TUIC_UUID=$(grep '^\[users\]' -A1 "$SERVER_TOML" | tail -n1 | awk '{print $1}' | tr -d '\n\r ' || echo "")
+    TUIC_PASSWORD=$(grep '^\[users\]' -A1 "$SERVER_TOML" | tail -n1 | awk -F'"' '{print $2}' | tr -d '\n\r ' || echo "")
+    
+    if [[ -n "$TUIC_PORT" ]] && [[ -n "$TUIC_UUID" ]] && [[ -n "$TUIC_PASSWORD" ]]; then
+      echo "📂 Existing config detected. Loading..."
+      return 0
+    fi
   fi
   return 1
 }
-
 # ========== 生成证书 ==========
 generate_cert() {
-  if [[ -f "$CERT_PEM" && -f "$KEY_PEM" ]]; then
+  if [[ -f "$CERT_PEM" ]] && [[ -f "$KEY_PEM" ]]; then
     echo "🔐 Certificate exists, skipping."
     return
   fi
@@ -93,8 +90,8 @@ generate_cert() {
     -keyout "$KEY_PEM" -out "$CERT_PEM" -subj "/CN=${MASQ_DOMAIN}" -days 365 -nodes >/dev/null 2>&1
   chmod 600 "$KEY_PEM"
   chmod 644 "$CERT_PEM"
+  echo "✅ Certificate generated successfully."
 }
-
 # ========== 下载二进制 ==========
 download_binary() {
   if [[ -x "$TUIC_BIN" ]]; then
@@ -102,10 +99,10 @@ download_binary() {
     return
   fi
   echo "📥 Downloading tuic-server..."
-  curl -L -o "$TUIC_BIN" "$TUIC_DOWNLOAD_URL"
+  curl -L --retry 3 --connect-timeout 30 -o "$TUIC_BIN" "$TUIC_DOWNLOAD_URL"
   chmod +x "$TUIC_BIN"
+  echo "✅ Download completed successfully."
 }
-
 # ========== 检测系统资源 ==========
 detect_system_resources() {
   local total_mem=$(free -m 2>/dev/null | awk '/^Mem:/{print $2}' || echo "512")
@@ -116,17 +113,17 @@ detect_system_resources() {
   echo "   🔧 CPU 核心: ${cpu_cores}"
   
   # 根据内存自动调整配置
-  if [ "$total_mem" -lt 128 ]; then
+  if [[ "$total_mem" -lt 128 ]]; then
     SEND_WINDOW=8388608
     RECV_WINDOW=4194304
     INIT_WINDOW=1572864
     echo "   ⚙️ 检测到超低内存环境（<128MB），使用最小配置"
-  elif [ "$total_mem" -lt 384 ]; then
+  elif [[ "$total_mem" -lt 384 ]]; then
     SEND_WINDOW=16777216
     RECV_WINDOW=8388608
     INIT_WINDOW=3145728
     echo "   ⚙️ 检测到低内存环境（<384MB），使用优化配置"
-  elif [ "$total_mem" -lt 768 ]; then
+  elif [[ "$total_mem" -lt 768 ]]; then
     SEND_WINDOW=25165824
     RECV_WINDOW=12582912
     INIT_WINDOW=4718592
@@ -138,7 +135,6 @@ detect_system_resources() {
     echo "   ⚙️ 内存充足（≥768MB），使用标准配置"
   fi
 }
-
 # ========== 生成配置 ==========
 generate_config() {
   # 检测容器环境，设置合适的日志级别
@@ -151,7 +147,6 @@ generate_config() {
 cat > "$SERVER_TOML" <<EOF
 log_level = "${log_level}"
 server = "0.0.0.0:${TUIC_PORT}"
-
 udp_relay_ipv6 = false
 zero_rtt_handshake = true
 dual_stack = false
@@ -160,20 +155,16 @@ task_negotiation_timeout = "4s"
 gc_interval = "8s"
 gc_lifetime = "8s"
 max_external_packet_size = 8192
-
 [users]
 ${TUIC_UUID} = "${TUIC_PASSWORD}"
-
 [tls]
 certificate = "$CERT_PEM"
 private_key = "$KEY_PEM"
 alpn = ["h3"]
-
 [restful]
 addr = "127.0.0.1:${TUIC_PORT}"
 secret = "$(openssl rand -hex 16)"
 maximum_clients_per_user = 999999999
-
 [quic]
 initial_mtu = $((1200 + RANDOM % 200))
 min_mtu = 1200
@@ -182,18 +173,15 @@ pmtu = true
 send_window = ${SEND_WINDOW}
 receive_window = ${RECV_WINDOW}
 max_idle_time = "25s"
-
 [quic.congestion_control]
 controller = "bbr"
 initial_window = ${INIT_WINDOW}
 EOF
 }
-
 # ========== 获取公网IP ==========
 get_server_ip() {
   curl -s --connect-timeout 3 https://api64.ipify.org || echo "YOUR_SERVER_IP"
 }
-
 # ========== 生成TUIC链接 ==========
 generate_link() {
   local ip="$1"
@@ -204,7 +192,6 @@ EOF
   echo "🔗 TUIC 链接已生成:"
   cat "$LINK_TXT"
 }
-
 # ========== 安装自动启动 ==========
 install_autostart() {
   local work_dir="$(pwd)"
@@ -216,7 +203,6 @@ install_autostart() {
 [Unit]
 Description=TUIC Proxy Server
 After=network.target
-
 [Service]
 Type=simple
 WorkingDirectory=${work_dir}
@@ -224,7 +210,6 @@ ExecStart=${work_dir}/tuic-server -c ${work_dir}/server.toml
 Restart=always
 RestartSec=5
 User=$(whoami)
-
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -251,15 +236,12 @@ EOF
     echo "⚠️ Crontab 配置失败"
   fi
 }
-
 # ========== 资源监控函数 (公共) ==========
-
 # 获取网络流量（所有接口总和）
 get_net_traffic() {
   # 先用 sed 规范化格式：确保冒号后有空格，然后用 awk 求和
   sed 's/:/ /g' /proc/net/dev | awk 'NR>2 {if ($1 !~ /lo/) {rx+=$2; tx+=$10}} END {print rx+0 "\t" tx+0}' 2>/dev/null || printf "0\t0"
 }
-
 # 获取网络使用率（KB/s）
 get_net_usage() {
   read rx1 tx1 <<< $(get_net_traffic)
@@ -271,11 +253,11 @@ get_net_usage() {
   
   echo "${rx_rate}↓ ${tx_rate}↑"
 }
-
 # 获取 CPU 使用率
 get_cpu_usage() {
   # 优先使用 /proc/stat 因为格式更统一
   if [ -f /proc/stat ]; then
+  if [[ -f /proc/stat ]]; then
     # 第一次采样
     eval $(awk '/^cpu /{print "total1=" $2+$3+$4+$5+$6+$7+$8 "; idle1=" $5}' /proc/stat)
     sleep 1
@@ -286,6 +268,7 @@ get_cpu_usage() {
     local diff_total=$((total2 - total1))
     
     if [ "$diff_total" -gt 0 ]; then
+    if [[ "$diff_total" -gt 0 ]]; then
       # 使用 awk 进行浮点运算
       echo "$diff_idle $diff_total" | awk '{printf "%.1f", 100 * (1 - $1/$2)}'
     else
@@ -298,16 +281,17 @@ get_cpu_usage() {
     echo "0.0"
   fi
 }
-
 # 获取内存使用率
 get_mem_usage() {
   if command -v free >/dev/null 2>&1; then
     free 2>/dev/null | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}' || echo "0"
   elif [ -f /proc/meminfo ]; then
+  elif [[ -f /proc/meminfo ]]; then
     local total=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
     local avail=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
     
     if [ -n "$total" ] && [ -n "$avail" ] && [ "$total" -gt 0 ]; then
+    if [[ -n "$total" ]] && [[ -n "$avail" ]] && [[ "$total" -gt 0 ]]; then
       local used=$((total - avail))
       echo "$used $total" | awk '{printf "%.0f", 100 * $1 / $2}'
     else
@@ -317,19 +301,21 @@ get_mem_usage() {
     echo "0"
   fi
 }
-
 # 动态调整配置
 adjust_config() {
   local cpu=$1
   local mem=$2
   
   if [ ! -f "server.toml" ]; then return; fi
+  if [[ ! -f "server.toml" ]]; then return; fi
   
   if [ "${cpu%.*}" -gt "$CPU_THRESHOLD" ] || [ "${mem%.*}" -gt "$MEM_THRESHOLD" ]; then
+  if [[ "${cpu%.*}" -gt "$CPU_THRESHOLD" ]] || [[ "${mem%.*}" -gt "$MEM_THRESHOLD" ]]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ 资源过高 CPU:${cpu}% MEM:${mem}% - 降低配置"
     sed -i 's/send_window = 33554432/send_window = 16777216/; s/receive_window = 16777216/receive_window = 8388608/; s/initial_window = 6291456/initial_window = 3145728/' server.toml 2>/dev/null
     pkill -HUP -f "tuic-server" 2>/dev/null || systemctl reload tuic 2>/dev/null || true
   elif [ "${cpu%.*}" -lt 50 ] && [ "${mem%.*}" -lt 50 ]; then
+  elif [[ "${cpu%.*}" -lt 50 ]] && [[ "${mem%.*}" -lt 50 ]]; then
     if grep -q 'send_window = 16777216' server.toml 2>/dev/null; then
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 资源充足 CPU:${cpu}% MEM:${mem}% - 恢复配置"
       sed -i 's/send_window = 16777216/send_window = 33554432/; s/receive_window = 8388608/receive_window = 16777216/; s/initial_window = 3145728/initial_window = 6291456/' server.toml 2>/dev/null
@@ -337,7 +323,6 @@ adjust_config() {
     fi
   fi
 }
-
 # ========== 启动资源监控 ==========
 start_resource_monitor() {
   cat > tuic_monitor.sh <<MONITOR_EOF
@@ -347,13 +332,11 @@ MONITOR_INTERVAL=10
 CPU_THRESHOLD=85
 MEM_THRESHOLD=85
 NET_INTERFACE=""
-
 $(declare -f get_net_traffic)
 $(declare -f get_net_usage)
 $(declare -f get_cpu_usage)
 $(declare -f get_mem_usage)
 $(declare -f adjust_config)
-
 # 主监控循环
 while true; do
   cpu=\$(get_cpu_usage)
@@ -375,7 +358,6 @@ MONITOR_EOF
   echo $! > .tuic_monitor.pid
   echo "✅ 资源监控已启动 (PID: $!)"
 }
-
 # ========== 检测容器环境 ==========
 is_container_env() {
   if [[ -f /.dockerenv ]] || [[ -n "${PTERODACTYL:-}" ]] || [[ -n "${container:-}" ]] || [[ -n "${KUBERNETES_SERVICE_HOST:-}" ]]; then
@@ -384,7 +366,6 @@ is_container_env() {
     return 1
   fi
 }
-
 # ========== 守护进程 ==========
 run_background_loop() {
   echo "🚀 启动 TUIC 服务器..."
@@ -475,7 +456,6 @@ run_background_loop() {
     done
   fi
 }
-
 # ========== 备份关键文件 ==========
 backup_critical_files() {
   local backup_dir=".tuic_backup"
@@ -491,7 +471,6 @@ backup_critical_files() {
     echo "🔐 已备份证书文件"
   fi
 }
-
 # ========== 恢复关键文件 ==========
 restore_critical_files() {
   local backup_dir=".tuic_backup"
@@ -518,7 +497,6 @@ restore_critical_files() {
     return 1
   fi
 }
-
 # ========== 清理旧文件 ==========
 cleanup_files() {
   echo "🧹 清理旧文件..."
@@ -530,7 +508,6 @@ cleanup_files() {
   pkill -f "tuic-server" 2>/dev/null || true
   pkill -f "tuic_monitor.sh" 2>/dev/null || true
 }
-
 # ========== 主流程 ==========
 main() {
   echo "=========================================================================="
@@ -569,7 +546,6 @@ main() {
     generate_cert
     download_binary
   fi
-
   # 保存配置信息到文件（用于查看）
   cat > tuic_config.txt <<EOF
 # TUIC 配置信息
@@ -577,11 +553,9 @@ main() {
 UUID: ${TUIC_UUID}
 密码: ${TUIC_PASSWORD}
 SNI: ${MASQ_DOMAIN}
-
 # 重启后会自动读取 server.toml 配置文件
 # 配置文件路径: $(pwd)/server.toml
 EOF
-
   ip="$(get_server_ip)"
   generate_link "$ip"
   
@@ -608,5 +582,4 @@ EOF
   
   run_background_loop
 }
-
 main "$@"
