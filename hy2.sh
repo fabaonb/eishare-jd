@@ -342,21 +342,51 @@ adjust_config() {
   
   if [[ ! -f "server.yaml" ]]; then return; fi
   
+  # 如果当前已经是最低配置，则无法进一步降低
+  # 如果当前是原始配置，且资源紧张，则降低配置
+  
   if [[ "${cpu%.*}" -gt "$CPU_THRESHOLD" ]] || [[ "${mem%.*}" -gt "$MEM_THRESHOLD" ]]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ 资源过高 CPU:${cpu}% MEM:${mem}% - 降低配置"
-    sed -i 's/up: "200mbps"/up: "100mbps"/; s/down: "200mbps"/down: "100mbps"/; s/max_concurrent_streams: 4/max_concurrent_streams: 2/' server.yaml 2>/dev/null
-    pkill -HUP -f "hysteria-linux" 2>/dev/null || systemctl reload hysteria2 2>/dev/null || true
+    # 尝试降低配置
+    if grep -q "up: \"${ORIGIN_BW_UP}\"" server.yaml 2>/dev/null; then
+       if [[ "${ORIGIN_BW_UP}" != "${REDUCED_BW_UP}" ]]; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ 资源过高 CPU:${cpu}% MEM:${mem}% - 降低配置"
+          sed -i "s/up: \"${ORIGIN_BW_UP}\"/up: \"${REDUCED_BW_UP}\"/; s/down: \"${ORIGIN_BW_DOWN}\"/down: \"${REDUCED_BW_DOWN}\"/; s/max_concurrent_streams: ${ORIGIN_STREAMS}/max_concurrent_streams: ${REDUCED_STREAMS}/" server.yaml 2>/dev/null
+          pkill -HUP -f "hysteria-linux" 2>/dev/null || systemctl reload hysteria2 2>/dev/null || true
+       fi
+    fi
   elif [[ "${cpu%.*}" -lt 50 ]] && [[ "${mem%.*}" -lt 50 ]]; then
-    if grep -q 'up: "100mbps"' server.yaml 2>/dev/null; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 资源充足 CPU:${cpu}% MEM:${mem}% - 恢复配置"
-      sed -i 's/up: "100mbps"/up: "200mbps"/; s/down: "100mbps"/down: "200mbps"/; s/max_concurrent_streams: 2/max_concurrent_streams: 4/' server.yaml 2>/dev/null
-      pkill -HUP -f "hysteria-linux" 2>/dev/null || systemctl reload hysteria2 2>/dev/null || true
+    # 尝试恢复配置
+    if grep -q "up: \"${REDUCED_BW_UP}\"" server.yaml 2>/dev/null; then
+       if [[ "${ORIGIN_BW_UP}" != "${REDUCED_BW_UP}" ]]; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 资源充足 CPU:${cpu}% MEM:${mem}% - 恢复配置"
+          sed -i "s/up: \"${REDUCED_BW_UP}\"/up: \"${ORIGIN_BW_UP}\"/; s/down: \"${REDUCED_BW_DOWN}\"/down: \"${ORIGIN_BW_DOWN}\"/; s/max_concurrent_streams: ${REDUCED_STREAMS}/max_concurrent_streams: ${ORIGIN_STREAMS}/" server.yaml 2>/dev/null
+          pkill -HUP -f "hysteria-linux" 2>/dev/null || systemctl reload hysteria2 2>/dev/null || true
+       fi
     fi
   fi
 }
 
 # ========== 启动资源监控 ==========
 start_resource_monitor() {
+  # 计算降低后的配置
+  local reduced_bw_up="${BANDWIDTH_UP}"
+  local reduced_bw_down="${BANDWIDTH_DOWN}"
+  local reduced_streams="${MAX_STREAMS}"
+  
+  if [[ "${BANDWIDTH_UP}" == "200mbps" ]]; then
+    reduced_bw_up="100mbps"
+    reduced_bw_down="100mbps"
+    reduced_streams="3"
+  elif [[ "${BANDWIDTH_UP}" == "150mbps" ]]; then
+    reduced_bw_up="100mbps"
+    reduced_bw_down="100mbps"
+    reduced_streams="3"
+  elif [[ "${BANDWIDTH_UP}" == "100mbps" ]]; then
+    reduced_bw_up="50mbps"
+    reduced_bw_down="50mbps"
+    reduced_streams="2"
+  fi
+
   cat > hy2_monitor.sh <<MONITOR_EOF
 #!/bin/bash
 # Hysteria2 资源监控脚本
@@ -364,6 +394,15 @@ MONITOR_INTERVAL=10
 CPU_THRESHOLD=85
 MEM_THRESHOLD=85
 NET_INTERFACE=""
+
+# 注入配置变量
+ORIGIN_BW_UP="${BANDWIDTH_UP}"
+ORIGIN_BW_DOWN="${BANDWIDTH_DOWN}"
+ORIGIN_STREAMS="${MAX_STREAMS}"
+
+REDUCED_BW_UP="${reduced_bw_up}"
+REDUCED_BW_DOWN="${reduced_bw_down}"
+REDUCED_STREAMS="${reduced_streams}"
 
 $(declare -f get_net_traffic)
 $(declare -f get_net_usage)
@@ -373,15 +412,15 @@ $(declare -f adjust_config)
 
 # 主监控循环
 while true; do
-  cpu=\\$(get_cpu_usage)
-  mem=\\$(get_mem_usage)
-  net=\\$(get_net_usage)
+  cpu=\$(get_cpu_usage)
+  mem=\$(get_mem_usage)
+  net=\$(get_net_usage)
   
   # 记录详细资源信息
-  echo "[\\$(date '+%Y-%m-%d %H:%M:%S')] 📊 CPU: \\${cpu}% | 内存: \\${mem}% | 网络: \\${net} KB/s"
+  echo "[\$(date '+%Y-%m-%d %H:%M:%S')] 📊 CPU: \${cpu}% | 内存: \${mem}% | 网络: \${net} KB/s"
   
-  adjust_config "\\$cpu" "\\$mem"
-  sleep "\\$MONITOR_INTERVAL"
+  adjust_config "\$cpu" "\$mem"
+  sleep "\$MONITOR_INTERVAL"
 done
 MONITOR_EOF
   
@@ -509,7 +548,7 @@ EOF
   start_resource_monitor
   
   # 检测是否为交互式终端（增强检测）
-  if [[ -t 0 ]] && [[ -t 1 ]] && [[ -n "${TERM:-}" ]] && [[ -n "${PS1:-}" ]]; then
+  if [[ -t 0 ]]; then
     # 交互式环境，询问是否安装自动启动
     read -p "🔧 是否配置服务器重启自动运行？(y/n): " -n 1 -r
     echo
@@ -544,7 +583,7 @@ run_background_loop() {
       sleep 10
       while true; do
         # 第一次采样：CPU 和网络
-        if [ -f /proc/stat ]; then
+        if [[ -f /proc/stat ]]; then
           eval $(awk '/^cpu /{print "total1=" $2+$3+$4+$5+$6+$7+$8 "; idle1=" $5}' /proc/stat)
         else
           total1=0
@@ -558,14 +597,14 @@ run_background_loop() {
         sleep 1
         
         # 第二次采样：CPU 和网络
-        if [ -f /proc/stat ]; then
+        if [[ -f /proc/stat ]]; then
           eval $(awk '/^cpu /{print "total2=" $2+$3+$4+$5+$6+$7+$8 "; idle2=" $5}' /proc/stat)
           
           # 计算 CPU 使用率
           diff_idle=$((idle2 - idle1))
           diff_total=$((total2 - total1))
           
-          if [ "$diff_total" -gt 0 ]; then
+          if [[ "$diff_total" -gt 0 ]]; then
             CPU_USAGE=$(echo "$diff_idle $diff_total" | awk '{printf "%.1f%%", 100 * (1 - $1/$2)}')
           else
             CPU_USAGE="0.0%"
@@ -581,11 +620,11 @@ run_background_loop() {
         TX_RATE=$(( (TX2 - TX1) / 1024 ))
         
         # 获取内存使用情况（从 /proc/meminfo）
-        if [ -f /proc/meminfo ]; then
+        if [[ -f /proc/meminfo ]]; then
           MEM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
           MEM_AVAIL=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
           
-          if [ -n "$MEM_TOTAL" ] && [ -n "$MEM_AVAIL" ] && [ "$MEM_TOTAL" -gt 0 ]; then
+          if [[ -n "$MEM_TOTAL" ]] && [[ -n "$MEM_AVAIL" ]] && [[ "$MEM_TOTAL" -gt 0 ]]; then
             MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
             MEM_USAGE=$(echo "$MEM_USED" | awk '{printf "%.0fMB", $1 / 1024}')
             MEM_PERCENT=$(echo "$MEM_USED $MEM_TOTAL" | awk '{printf "%.0f%%", 100 * $1 / $2}')

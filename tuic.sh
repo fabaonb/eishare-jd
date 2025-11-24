@@ -20,8 +20,7 @@ MONITOR_INTERVAL=10             # 监控间隔（秒）
 CPU_THRESHOLD=85                # CPU 告警阈值（%）
 MEM_THRESHOLD=85                # 内存告警阈值（%）
 HEARTBEAT_INTERVAL=1           # 心跳日志间隔（秒）
-# 下载地址
-TUIC_DOWNLOAD_URL="https://github.com/Itsusinn/tuic/releases/download/${TUIC_VERSION}/tuic-server-x86_64-linux"
+
 # ============================================================
 # ========== 随机生成函数 ==========
 random_port() {
@@ -92,14 +91,35 @@ generate_cert() {
   chmod 644 "$CERT_PEM"
   echo "✅ Certificate generated successfully."
 }
+# ========== 检测架构 ==========
+arch_name() {
+  local machine
+  machine=$(uname -m | tr '[:upper:]' '[:lower:]')
+  if [[ "$machine" == *"arm64"* ]] || [[ "$machine" == *"aarch64"* ]]; then
+    echo "aarch64"
+  elif [[ "$machine" == *"x86_64"* ]] || [[ "$machine" == *"amd64"* ]]; then
+    echo "x86_64"
+  else
+    echo ""
+  fi
+}
+
+ARCH=$(arch_name)
+if [[ -z "$ARCH" ]]; then
+  echo "❌ 无法识别 CPU 架构: $(uname -m)"
+  exit 1
+fi
+
 # ========== 下载二进制 ==========
 download_binary() {
   if [[ -x "$TUIC_BIN" ]]; then
     echo "✅ tuic-server already exists."
     return
   fi
-  echo "📥 Downloading tuic-server..."
-  curl -L --retry 3 --connect-timeout 30 -o "$TUIC_BIN" "$TUIC_DOWNLOAD_URL"
+  
+  local url="https://github.com/Itsusinn/tuic/releases/download/${TUIC_VERSION}/tuic-server-${ARCH}-linux"
+  echo "📥 Downloading tuic-server (${ARCH})..."
+  curl -L --retry 3 --connect-timeout 30 -o "$TUIC_BIN" "$url"
   chmod +x "$TUIC_BIN"
   echo "✅ Download completed successfully."
 }
@@ -256,7 +276,6 @@ get_net_usage() {
 # 获取 CPU 使用率
 get_cpu_usage() {
   # 优先使用 /proc/stat 因为格式更统一
-  if [ -f /proc/stat ]; then
   if [[ -f /proc/stat ]]; then
     # 第一次采样
     eval $(awk '/^cpu /{print "total1=" $2+$3+$4+$5+$6+$7+$8 "; idle1=" $5}' /proc/stat)
@@ -267,7 +286,6 @@ get_cpu_usage() {
     local diff_idle=$((idle2 - idle1))
     local diff_total=$((total2 - total1))
     
-    if [ "$diff_total" -gt 0 ]; then
     if [[ "$diff_total" -gt 0 ]]; then
       # 使用 awk 进行浮点运算
       echo "$diff_idle $diff_total" | awk '{printf "%.1f", 100 * (1 - $1/$2)}'
@@ -285,12 +303,10 @@ get_cpu_usage() {
 get_mem_usage() {
   if command -v free >/dev/null 2>&1; then
     free 2>/dev/null | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}' || echo "0"
-  elif [ -f /proc/meminfo ]; then
   elif [[ -f /proc/meminfo ]]; then
     local total=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
     local avail=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
     
-    if [ -n "$total" ] && [ -n "$avail" ] && [ "$total" -gt 0 ]; then
     if [[ -n "$total" ]] && [[ -n "$avail" ]] && [[ "$total" -gt 0 ]]; then
       local used=$((total - avail))
       echo "$used $total" | awk '{printf "%.0f", 100 * $1 / $2}'
@@ -306,25 +322,47 @@ adjust_config() {
   local cpu=$1
   local mem=$2
   
-  if [ ! -f "server.toml" ]; then return; fi
   if [[ ! -f "server.toml" ]]; then return; fi
   
-  if [ "${cpu%.*}" -gt "$CPU_THRESHOLD" ] || [ "${mem%.*}" -gt "$MEM_THRESHOLD" ]; then
   if [[ "${cpu%.*}" -gt "$CPU_THRESHOLD" ]] || [[ "${mem%.*}" -gt "$MEM_THRESHOLD" ]]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ 资源过高 CPU:${cpu}% MEM:${mem}% - 降低配置"
-    sed -i 's/send_window = 33554432/send_window = 16777216/; s/receive_window = 16777216/receive_window = 8388608/; s/initial_window = 6291456/initial_window = 3145728/' server.toml 2>/dev/null
-    pkill -HUP -f "tuic-server" 2>/dev/null || systemctl reload tuic 2>/dev/null || true
-  elif [ "${cpu%.*}" -lt 50 ] && [ "${mem%.*}" -lt 50 ]; then
+    if grep -q "send_window = ${ORIGIN_SEND}" server.toml 2>/dev/null; then
+       if [[ "${ORIGIN_SEND}" != "${REDUCED_SEND}" ]]; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ 资源过高 CPU:${cpu}% MEM:${mem}% - 降低配置"
+          sed -i "s/send_window = ${ORIGIN_SEND}/send_window = ${REDUCED_SEND}/; s/receive_window = ${ORIGIN_RECV}/receive_window = ${REDUCED_RECV}/; s/initial_window = ${ORIGIN_INIT}/initial_window = ${REDUCED_INIT}/" server.toml 2>/dev/null
+          pkill -HUP -f "tuic-server" 2>/dev/null || systemctl reload tuic 2>/dev/null || true
+       fi
+    fi
   elif [[ "${cpu%.*}" -lt 50 ]] && [[ "${mem%.*}" -lt 50 ]]; then
-    if grep -q 'send_window = 16777216' server.toml 2>/dev/null; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 资源充足 CPU:${cpu}% MEM:${mem}% - 恢复配置"
-      sed -i 's/send_window = 16777216/send_window = 33554432/; s/receive_window = 8388608/receive_window = 16777216/; s/initial_window = 3145728/initial_window = 6291456/' server.toml 2>/dev/null
-      pkill -HUP -f "tuic-server" 2>/dev/null || systemctl reload tuic 2>/dev/null || true
+    if grep -q "send_window = ${REDUCED_SEND}" server.toml 2>/dev/null; then
+       if [[ "${ORIGIN_SEND}" != "${REDUCED_SEND}" ]]; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 资源充足 CPU:${cpu}% MEM:${mem}% - 恢复配置"
+          sed -i "s/send_window = ${REDUCED_SEND}/send_window = ${ORIGIN_SEND}/; s/receive_window = ${REDUCED_RECV}/receive_window = ${ORIGIN_RECV}/; s/initial_window = ${REDUCED_INIT}/initial_window = ${ORIGIN_INIT}/" server.toml 2>/dev/null
+          pkill -HUP -f "tuic-server" 2>/dev/null || systemctl reload tuic 2>/dev/null || true
+       fi
     fi
   fi
 }
 # ========== 启动资源监控 ==========
 start_resource_monitor() {
+  # 计算降低后的配置
+  local reduced_send="${SEND_WINDOW}"
+  local reduced_recv="${RECV_WINDOW}"
+  local reduced_init="${INIT_WINDOW}"
+  
+  if [[ "${SEND_WINDOW}" == "33554432" ]]; then
+    reduced_send="16777216"
+    reduced_recv="8388608"
+    reduced_init="3145728"
+  elif [[ "${SEND_WINDOW}" == "25165824" ]]; then
+    reduced_send="16777216"
+    reduced_recv="8388608"
+    reduced_init="3145728"
+  elif [[ "${SEND_WINDOW}" == "16777216" ]]; then
+    reduced_send="8388608"
+    reduced_recv="4194304"
+    reduced_init="1572864"
+  fi
+  
   cat > tuic_monitor.sh <<MONITOR_EOF
 #!/bin/bash
 # TUIC 资源监控脚本
@@ -332,11 +370,22 @@ MONITOR_INTERVAL=10
 CPU_THRESHOLD=85
 MEM_THRESHOLD=85
 NET_INTERFACE=""
+
+# 注入配置变量
+ORIGIN_SEND="${SEND_WINDOW}"
+ORIGIN_RECV="${RECV_WINDOW}"
+ORIGIN_INIT="${INIT_WINDOW}"
+
+REDUCED_SEND="${reduced_send}"
+REDUCED_RECV="${reduced_recv}"
+REDUCED_INIT="${reduced_init}"
+
 $(declare -f get_net_traffic)
 $(declare -f get_net_usage)
 $(declare -f get_cpu_usage)
 $(declare -f get_mem_usage)
 $(declare -f adjust_config)
+
 # 主监控循环
 while true; do
   cpu=\$(get_cpu_usage)
@@ -385,7 +434,7 @@ run_background_loop() {
       sleep 10
       while true; do
         # 第一次采样：CPU 和网络
-        if [ -f /proc/stat ]; then
+        if [[ -f /proc/stat ]]; then
           eval $(awk '/^cpu /{print "total1=" $2+$3+$4+$5+$6+$7+$8 "; idle1=" $5}' /proc/stat)
         else
           total1=0
@@ -399,14 +448,14 @@ run_background_loop() {
         sleep 1
         
         # 第二次采样：CPU 和网络
-        if [ -f /proc/stat ]; then
+        if [[ -f /proc/stat ]]; then
           eval $(awk '/^cpu /{print "total2=" $2+$3+$4+$5+$6+$7+$8 "; idle2=" $5}' /proc/stat)
           
           # 计算 CPU 使用率
           diff_idle=$((idle2 - idle1))
           diff_total=$((total2 - total1))
           
-          if [ "$diff_total" -gt 0 ]; then
+          if [[ "$diff_total" -gt 0 ]]; then
             CPU_USAGE=$(echo "$diff_idle $diff_total" | awk '{printf "%.1f%%", 100 * (1 - $1/$2)}')
           else
             CPU_USAGE="0.0%"
@@ -422,11 +471,11 @@ run_background_loop() {
         TX_RATE=$(( (TX2 - TX1) / 1024 ))
         
         # 获取内存使用情况（从 /proc/meminfo）
-        if [ -f /proc/meminfo ]; then
+        if [[ -f /proc/meminfo ]]; then
           MEM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
           MEM_AVAIL=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
           
-          if [ -n "$MEM_TOTAL" ] && [ -n "$MEM_AVAIL" ] && [ "$MEM_TOTAL" -gt 0 ]; then
+          if [[ -n "$MEM_TOTAL" ]] && [[ -n "$MEM_AVAIL" ]] && [[ "$MEM_TOTAL" -gt 0 ]]; then
             MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
             MEM_USAGE=$(echo "$MEM_USED" | awk '{printf "%.0fMB", $1 / 1024}')
             MEM_PERCENT=$(echo "$MEM_USED $MEM_TOTAL" | awk '{printf "%.0f%%", 100 * $1 / $2}')
@@ -567,7 +616,7 @@ EOF
   start_resource_monitor
   
   # 检测是否为交互式终端（增强检测）
-  if [[ -t 0 ]] && [[ -t 1 ]] && [[ -n "${TERM:-}" ]] && [[ -n "${PS1:-}" ]]; then
+  if [[ -t 0 ]]; then
     # 交互式环境，询问是否安装自动启动
     read -p "🔧 是否配置服务器重启自动运行？(y/n): " -n 1 -r
     echo
